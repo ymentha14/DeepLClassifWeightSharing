@@ -1,0 +1,53 @@
+class WeightAux(nn.Module):
+    def __init__(self,weightshare=True,auxloss=True):
+        super(WeightAux,self).__init__()
+        self.weightshare = weightshare
+        self.auxloss = auxloss
+        self.net0 = Net2()
+        self.net1 = Net2()
+        self.linblock = nn.Sequential(nn.Linear(20,40),
+                                     nn.LeakyReLU(),
+                                     nn.Linear(40,80),
+                                     nn.LeakyReLU(),
+                                     nn.Linear(80,2))
+
+        
+    def forward(self,x):
+        x0 = self.net0(x[:,0].unsqueeze(1))
+        x1 = self.net0(x[:,1].unsqueeze(1)) if self.weightshare else self.net0(x[:,1].unsqueeze(1))
+        comp = torch.cat((x0,x1),dim=1)
+        comp = self.linblock(comp)
+        return x0,x1,comp
+    def __str__(self):
+        stro = "Arch"
+        if self.weightshare:
+            stro += "W"
+        if self.auxloss:
+            stro += "A"
+        return stro
+class Net2(nn.Module):
+    def __init__(self,n_hidden = 256,chan = 1):
+        super(Net2,self).__init__()
+        self.hidden = n_hidden
+        self.conv_block1 = nn.Sequential(
+            nn.Conv2d(chan,32,kernel_size=3),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU()
+        )
+        self.conv_block2 = nn.Sequential(
+            nn.Conv2d(32,64,kernel_size=3),
+            nn.MaxPool2d(kernel_size=2,stride=2)
+            ,nn.BatchNorm2d(64),
+            nn.ReLU()
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(256,n_hidden),
+            nn.BatchNorm1d(n_hidden),
+            nn.Linear(n_hidden,10))
+            
+    def forward(self,x):
+        x = self.conv_block1(x)
+        x = self.conv_block2(x)
+        x = self.classifier(x.view(x.size(0),-1))
+        return x
