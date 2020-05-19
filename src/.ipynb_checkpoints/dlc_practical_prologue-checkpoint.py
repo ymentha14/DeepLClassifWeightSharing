@@ -46,7 +46,7 @@ def convert_to_one_hot_labels(input, target):
     tmp.scatter_(1, target.view(-1, 1), 1.0)
     return tmp
 
-def load_data(cifar = None, one_hot_labels = False, normalize = False, flatten = True):
+def load_data(cifar = None, one_hot_labels = False, normalize = False, flatten = True,verbose=False):
 
     if args.data_dir is not None:
         data_dir = args.data_dir
@@ -69,7 +69,8 @@ def load_data(cifar = None, one_hot_labels = False, normalize = False, flatten =
         test_target = torch.tensor(cifar_test_set.targets, dtype = torch.int64)
 
     else:
-        print('* Using MNIST')
+        if verbose:
+            print('* Using MNIST')
         mnist_train_set = datasets.MNIST(data_dir + '/mnist/', train = True, download = True)
         mnist_test_set = datasets.MNIST(data_dir + '/mnist/', train = False, download = True)
 
@@ -87,19 +88,21 @@ def load_data(cifar = None, one_hot_labels = False, normalize = False, flatten =
             raise ValueError('Cannot have both --full and --tiny')
     else:
         if args.tiny:
-            print('** Reduce the data-set to the tiny setup')
+            if verbose:
+                print('** Reduce the data-set to the tiny setup')
             train_input = train_input.narrow(0, 0, 500)
             train_target = train_target.narrow(0, 0, 500)
             test_input = test_input.narrow(0, 0, 100)
             test_target = test_target.narrow(0, 0, 100)
         else:
-            print('** Reduce the data-set (use --full for the full thing)')
+            if verbose:
+                print('** Reduce the data-set (use --full for the full thing)')
             train_input = train_input.narrow(0, 0, 1000)
             train_target = train_target.narrow(0, 0, 1000)
             test_input = test_input.narrow(0, 0, 1000)
             test_target = test_target.narrow(0, 0, 1000)
-
-    print('** Use {:d} train and {:d} test samples'.format(train_input.size(0), test_input.size(0)))
+    if verbose:
+        print('** Use {:d} train and {:d} test samples'.format(train_input.size(0), test_input.size(0)))
 
     if one_hot_labels:
         train_target = convert_to_one_hot_labels(train_input, train_target)
@@ -122,6 +125,8 @@ def mnist_to_pairs(nb, input, target):
     classes = target[a]
     target = (classes[:, 0] <= classes[:, 1]).long()
     return input, target, classes
+
+
 
 ######################################################################
 

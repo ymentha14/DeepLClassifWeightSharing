@@ -17,10 +17,10 @@ def GridSearch(HG,train2_input,train2_target,train2_classes,K=EXPLORE_K):
     HG : HyperGrid
     """
     #TODO: remove the [:1]
-    linGRID = HG.lin_view()[:1]
+    linGRID = HG.lin_view()
     for i,param in enumerate(linGRID):
         clear_output(wait=True)
-        print("Grid Search progression: {} %".format(i/len(linGRID)*100))
+        print("Grid Search progression: {:.2f} %".format(i/len(linGRID)*100))
         param.KFold(train2_input,train2_target,train2_classes,K=K)
         #backup in case of crash
         HG.save()

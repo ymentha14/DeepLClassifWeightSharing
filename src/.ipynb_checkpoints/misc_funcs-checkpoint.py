@@ -9,10 +9,10 @@ Created on Fri May 1 00:00:00 2020
 # testing purpose
 #RANDOM_SEED = 14
 # development purpose
-RANDOM_SEED = None
-EXPLORE_K = 2
-BIG_K = 2
-NB_EPOCHS = 10
+RANDOM_SEED = 3
+EXPLORE_K = 3
+BIG_K = 10
+NB_EPOCHS = 25
 sep = "-" * 20
 
 

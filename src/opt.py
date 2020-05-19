@@ -76,7 +76,8 @@ def get_accuracy(model,inputs,targets,set_type=""):
     print("{} accuracy: {:.2f}".format(set_type,accuracy) )
     return accuracy
 
-def Kfold_CV(inputs,targets,architecture,criterion,optimizer,lr,K=BIG_K,nb_epochs=NB_EPOCHS,verbose=False):
+def Kfold_CV(inputs,targets,architecture,criterion,optimizer,lr,K=BIG_K,
+             nb_epochs=NB_EPOCHS,verbose=False):
     """
     train the model passed in parameter on the data
     Parameters:
@@ -111,12 +112,12 @@ def Kfold_CV(inputs,targets,architecture,criterion,optimizer,lr,K=BIG_K,nb_epoch
     clear_output()
     print(sep)
     print("Accuracies for {}-fold:{}".format(K,accs.tolist()))
-    print("Mean accuracy:{}".format(accs.mean()))
+    print("Accuracy:{:.2f} +- {:.2f}".format(accs.mean(),accs.std()))
     print(sep)
     return accs.tolist()
 
-def train_model(train_input,train_target,
-                model,criterion,optimizer,lr,nb_epochs=NB_EPOCHS,verbose=False):
+def train_model(train_input,train_target,model,criterion,optimizer,
+                lr,nb_epochs=NB_EPOCHS,verbose=False):
     """
     train the model passed in parameter on the data
     Parameters:
@@ -215,11 +216,13 @@ class WeightAux(Clonable):
         return x0, x1, comp
 
     def __str__(self):
-        stro = "Arch"
+        stro = "Arch_"
         if self.weightshare:
-            stro += "_Weightshare"
+            stro += "Weightshare"
         if self.auxloss:
-            stro += "_Aux_loss"
+            stro += "Auxloss"
+        if not self.weightshare and not self.auxloss:
+            stro += "classic"
         return stro
 
 
@@ -276,18 +279,8 @@ def get_double_accuracy(model, train_input, train_target, train_classes, verbose
     return acc0, acc1, acc_comp
 
 
-def train_double_model(
-    train_input,
-    train_target,
-    train_classes,
-    model,
-    crit_comp,
-    optimizer,
-    lr,
-    lambd_=0.75,
-    nb_epochs=NB_EPOCHS,
-    verbose=False,
-):
+def train_double_model(train_input, train_target, train_classes,model,crit_comp,crit_class,optimizer,
+                       lr,lambd_=0.75,nb_epochs=NB_EPOCHS,verbose=False,prog_bar=False):
     """
     train a model on the given train_input using the passed parameters
     Parameters:
@@ -305,14 +298,15 @@ def train_double_model(
     """
     if RANDOM_SEED is not None:
         torch.manual_seed(RANDOM_SEED)
-    crit_comp = crit_comp()
+    if crit_comp is not None:
+        crit_comp = crit_comp()
     optimizer = optimizer(model.parameters(), lr=lr)
 
     batch_size = 100
-    crit_class = nn.CrossEntropyLoss()
+    crit_class = crit_class()
 
     for e in range(nb_epochs):
-        if verbose:
+        if prog_bar:
             clear_output(wait=True)
             print("Progression:{:.2f} %".format(e / nb_epochs * 100))
         for inputs, comp_targs, classes in zip(
@@ -320,19 +314,28 @@ def train_double_model(
             train_target.split(batch_size),
             train_classes.split(batch_size),
         ):
-            y_onehot = torch.FloatTensor(inputs.size(0), 2).zero_()
+            
             targ0 = classes[:, 0]
             targ1 = classes[:, 1]
             x0, x1, comp = model(inputs)
-            loss_class = crit_class(x0, targ0) + crit_class(x1, targ1)
-            if isinstance(crit_comp, (nn.CrossEntropyLoss, nn.NLLLoss)):
-                loss_comp = crit_comp(comp, comp_targs)
-            else:
-                y_onehot.zero_()
-                y_onehot.scatter_(1, comp_targs.unsqueeze(1), 1)
-                loss_comp = crit_comp(comp, y_onehot)
+            
+            def get_good_loss(crit,data,target,n_els):
+                if isinstance(crit, (nn.CrossEntropyLoss, nn.NLLLoss)):
+                    loss = crit(data, target)
+                else:
+                    y_onehot = torch.FloatTensor(target.size(0), n_els).zero_()
+                    y_onehot.zero_()
+                    y_onehot.scatter_(1, target.unsqueeze(1), 1)
+                    loss = crit(data, y_onehot)
+                return loss
+            
+            if (isinstance(model, Naive) or model.auxloss):
+                loss_class = get_good_loss(crit_class,x0,targ0,10) + get_good_loss(crit_class,x1,targ1,10)
+            if (not isinstance(model,Naive)):
+                loss_comp = get_good_loss(crit_comp,comp,comp_targs,2)
+            
             if isinstance(model, Naive):
-                totloss = loss_class
+                totloss = loss_class            
             elif model.auxloss:
                 totloss = lambd_ * loss_comp + (1 - lambd_) * loss_class
             else:
@@ -342,19 +345,8 @@ def train_double_model(
             optimizer.step()
 
 
-def Kfold_CVdouble(
-    inputs,
-    targets,
-    classes,
-    model_template,
-    crit_comp,
-    optimizer,
-    lr,
-    lambd_=0.75,
-    K=4,
-    nb_epochs=NB_EPOCHS,
-    verbose=False,
-):
+def Kfold_CVdouble(inputs,targets,classes,model_template,crit_comp,crit_class,optimizer,
+                   lr,lambd_=0.75,K=4,nb_epochs=NB_EPOCHS,verbose=False,prog_bar=False):
     """
     runs K fold Cross validation on the data passed in parameter
     Args:
@@ -371,6 +363,9 @@ def Kfold_CVdouble(
     indxes = torch.randperm(N).split(int(N / K))
     accs = torch.empty(K, 3)
     for k in range(K):
+        if prog_bar:
+            clear_output(wait=True)
+            print("Progression {:.2f}%".format(k/K*100))
         model = model_template.clone()
 
         test_indx = indxes[k]
@@ -384,18 +379,8 @@ def Kfold_CVdouble(
         test_targ = targets[test_indx]
         test_classes = classes[test_indx]
 
-        train_double_model(
-            train_inp,
-            train_targ,
-            train_classes,
-            model,
-            crit_comp,
-            optimizer,
-            lr,
-            lambd_,
-            nb_epochs=nb_epochs,
-            verbose=verbose,
-        )
+        train_double_model(train_inp,train_targ,train_classes,model,crit_comp,crit_class,optimizer,
+                           lr,lambd_,nb_epochs=nb_epochs)
         res = get_double_accuracy(model, test_inp, test_targ, test_classes)
         # 0th column: 1st group acc 1th column 2nd group acc 3rd column comp accuracy
         accs[k] = torch.Tensor(res)
