@@ -66,7 +66,7 @@ class Param():
         """
         self.check_hyper()
         rand_values = [Param.rando(param) for param in Param.hyper_params]
-        names = ["arch","comp_loss","class_loss","optim","lr","lambda"]
+        names = ["arch","loss_comp","loss_class","optim","lr","lambda"]
         return {name:val for name,val in zip(names,rand_values)}
     
     def mutate(self):
